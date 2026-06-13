@@ -50,6 +50,7 @@ function ModalServico({ initial, obraId, onClose, onSaved }: {
   );
   const [nVal, setNVal] = useState(""); const [nData, setNData] = useState(new Date().toISOString().slice(0,10)); const [nObs, setNObs] = useState("");
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   function addPag() {
     if (!nVal) return;
@@ -59,10 +60,17 @@ function ModalServico({ initial, obraId, onClose, onSaved }: {
 
   async function save() {
     setSaving(true);
+    setError("");
     const url = initial ? `/api/obras/${obraId}/servicos/${initial.id}` : `/api/obras/${obraId}/servicos`;
     const method = initial ? "PUT" : "POST";
-    await fetch(url, { method, headers: {"Content-Type":"application/json"}, body: JSON.stringify({prestador,categoria,valorTotal:Number(valorTotal),pagamentos}) });
-    setSaving(false); onSaved(); onClose();
+    const res = await fetch(url, { method, headers: {"Content-Type":"application/json"}, body: JSON.stringify({prestador,categoria,valorTotal:Number(valorTotal),pagamentos}) });
+    setSaving(false);
+    if (!res.ok) {
+      setError("Erro ao salvar. Verifique os dados e tente novamente.");
+      return;
+    }
+    onSaved();
+    onClose();
   }
 
   return (
@@ -104,8 +112,9 @@ function ModalServico({ initial, obraId, onClose, onSaved }: {
           </div>
         </div>
 
+        {error && <p className="text-red-500 text-xs mb-2">{error}</p>}
         <button onClick={save} disabled={saving} className="w-full py-3 bg-gray-900 text-white font-semibold rounded-xl text-sm disabled:opacity-50">
-          {saving ? "Salvando..." : "💾 Salvar"}
+          {saving ? "Salvando..." : "Salvar"}
         </button>
       </div>
     </div>
@@ -122,6 +131,7 @@ function ModalMaterial({ initial, obraId, onClose, onSaved }: {
   const [formas, setFormas] = useState<FormaPag[]>(initial?.formasPagamento || []);
   const [fMetodo, setFMetodo] = useState(METODOS[0]); const [fVal, setFVal] = useState("");
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   const somaFormas = formas.reduce((a,f)=>a+f.valor,0);
   const falta = Number(valorTotal||0) - somaFormas;
@@ -134,10 +144,17 @@ function ModalMaterial({ initial, obraId, onClose, onSaved }: {
 
   async function save() {
     setSaving(true);
+    setError("");
     const url = initial ? `/api/obras/${obraId}/materiais/${initial.id}` : `/api/obras/${obraId}/materiais`;
     const method = initial ? "PUT" : "POST";
-    await fetch(url, { method, headers: {"Content-Type":"application/json"}, body: JSON.stringify({item,categoria,valorTotal:Number(valorTotal),formasPagamento:formas}) });
-    setSaving(false); onSaved(); onClose();
+    const res = await fetch(url, { method, headers: {"Content-Type":"application/json"}, body: JSON.stringify({item,categoria,valorTotal:Number(valorTotal),formasPagamento:formas}) });
+    setSaving(false);
+    if (!res.ok) {
+      setError("Erro ao salvar. Verifique os dados e tente novamente.");
+      return;
+    }
+    onSaved();
+    onClose();
   }
 
   return (
@@ -163,7 +180,7 @@ function ModalMaterial({ initial, obraId, onClose, onSaved }: {
           <div className="flex justify-between items-center mb-2">
             <p className="text-xs font-medium text-gray-500">FORMAS DE PAGAMENTO</p>
             <span className={`text-xs font-semibold ${Math.abs(falta)<0.01?"text-green-600":falta>0?"text-yellow-600":"text-red-500"}`}>
-              {Math.abs(falta)<0.01?"✓ Bate":falta>0?`Falta ${fmt(falta)}`:`Excede ${fmt(-falta)}`}
+              {Math.abs(falta)<0.01?"Bate":falta>0?`Falta ${fmt(falta)}`:`Excede ${fmt(-falta)}`}
             </span>
           </div>
           {formas.map(f=>(
@@ -184,8 +201,9 @@ function ModalMaterial({ initial, obraId, onClose, onSaved }: {
           </div>
         </div>
 
+        {error && <p className="text-red-500 text-xs mb-2">{error}</p>}
         <button onClick={save} disabled={saving} className="w-full py-3 bg-gray-900 text-white font-semibold rounded-xl text-sm disabled:opacity-50">
-          {saving ? "Salvando..." : "💾 Salvar"}
+          {saving ? "Salvando..." : "Salvar"}
         </button>
       </div>
     </div>
@@ -202,21 +220,21 @@ function ModalCompartilhar({ servicos, materiais, onClose }: { servicos: Servico
   const tG = servicos.reduce((s,i)=>s+i.valorTotal,0) + materiais.reduce((s,i)=>s+i.valorTotal,0);
   const pG = servicos.reduce((s,i)=>s+totalPagoS(i),0) + materiais.reduce((s,i)=>s+totalPagoM(i),0);
 
-  let txt = `🏗 *CONTROLE DE OBRA*\n📅 ${new Date().toLocaleDateString("pt-BR")}\n\n`;
-  txt += `💰 Total: R$ ${fmtN(tG)}\n✅ Pago: R$ ${fmtN(pG)}\n🔴 Aberto: R$ ${fmtN(tG-pG)}\n📊 ${pct(pG,tG)}% concluído\n\n`;
+  let txt = `CONTROLE DE OBRA\n${new Date().toLocaleDateString("pt-BR")}\n\n`;
+  txt += `Total: R$ ${fmtN(tG)}\nPago: R$ ${fmtN(pG)}\nAberto: R$ ${fmtN(tG-pG)}\n${pct(pG,tG)}% concluído\n\n`;
   if (servicos.length) {
-    txt += `*SERVIÇOS*\n\`\`\`\n`;
+    txt += `SERVIÇOS\n`;
     txt += pad("PRESTADOR",18) + padL("TOTAL",10) + padL("PAGO",10) + padL("SALDO",10) + "\n";
     txt += "─".repeat(48) + "\n";
     servicos.forEach(s => { txt += pad(trunc(s.prestador,17),18) + padL(fmtN(s.valorTotal),10) + padL(fmtN(totalPagoS(s)),10) + padL(fmtN(saldoS(s)),10) + "\n"; });
-    txt += "```\n\n";
+    txt += "\n";
   }
   if (materiais.length) {
-    txt += `*MATERIAIS*\n`;
+    txt += `MATERIAIS\n`;
     materiais.forEach(m => {
-      txt += `▪ ${m.item} — R$ ${fmtN(m.valorTotal)}\n`;
+      txt += `- ${m.item} — R$ ${fmtN(m.valorTotal)}\n`;
       m.formasPagamento.forEach(f => { txt += `   ${f.metodo}: R$ ${fmtN(f.valor)}\n`; });
-      if (saldoM(m) > 0.01) txt += `   ⚠ Falta: R$ ${fmtN(saldoM(m))}\n`;
+      if (saldoM(m) > 0.01) txt += `   Falta: R$ ${fmtN(saldoM(m))}\n`;
     });
   }
 
@@ -227,13 +245,13 @@ function ModalCompartilhar({ servicos, materiais, onClose }: { servicos: Servico
     <div className="fixed inset-0 bg-black/40 z-50 flex items-end" onClick={e => e.target===e.currentTarget&&onClose()}>
       <div className="bg-white rounded-t-2xl w-full p-5 max-h-[85vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-3">
-          <span className="font-semibold text-gray-900">📋 Compartilhar dados</span>
+          <span className="font-semibold text-gray-900">Compartilhar dados</span>
           <button onClick={onClose} className="text-gray-400 text-xl">✕</button>
         </div>
         <p className="text-xs text-gray-400 mb-3">Tabela pronta para enviar como mensagem:</p>
         <pre className="text-[11px] leading-relaxed whitespace-pre-wrap break-words bg-gray-50 rounded-xl p-3 max-h-64 overflow-y-auto border border-gray-100 mb-4 font-mono">{txt}</pre>
-        <button onClick={share} className="w-full py-3 bg-green-50 text-green-700 font-semibold rounded-xl text-sm mb-2">📲 Enviar / compartilhar</button>
-        <button onClick={copy} className="w-full py-3 bg-blue-50 text-blue-700 font-semibold rounded-xl text-sm">📋 Copiar texto</button>
+        <button onClick={share} className="w-full py-3 bg-green-50 text-green-700 font-semibold rounded-xl text-sm mb-2">Enviar / compartilhar</button>
+        <button onClick={copy} className="w-full py-3 bg-blue-50 text-blue-700 font-semibold rounded-xl text-sm">Copiar texto</button>
       </div>
     </div>
   );
@@ -251,7 +269,7 @@ function ModalConvidar({ obraId, onClose }: { obraId: string; onClose: () => voi
       method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({email}),
     });
     const data = await res.json();
-    setMsg(res.ok ? "✅ Acesso concedido!" : `❌ ${data.error}`);
+    setMsg(res.ok ? "Acesso concedido!" : `Erro: ${data.error}`);
     setLoading(false);
   }
 
@@ -259,7 +277,7 @@ function ModalConvidar({ obraId, onClose }: { obraId: string; onClose: () => voi
     <div className="fixed inset-0 bg-black/40 z-50 flex items-end" onClick={e => e.target===e.currentTarget&&onClose()}>
       <div className="bg-white rounded-t-2xl w-full p-5">
         <div className="flex justify-between items-center mb-4">
-          <span className="font-semibold text-gray-900">👥 Convidar pessoa</span>
+          <span className="font-semibold text-gray-900">Convidar pessoa</span>
           <button onClick={onClose} className="text-gray-400 text-xl">✕</button>
         </div>
         <p className="text-xs text-gray-400 mb-3">A pessoa precisa ter feito login ao menos uma vez com o e-mail Google dela.</p>
@@ -286,19 +304,30 @@ export default function ObraPage() {
   const [modal, setModal] = useState<null|"servico"|"material"|"compartilhar"|"convidar">(null);
   const [editServico, setEditServico] = useState<Servico|undefined>();
   const [editMaterial, setEditMaterial] = useState<Material|undefined>();
+  const [deleteError, setDeleteError] = useState("");
 
-  useEffect(() => { if (status === "unauthenticated") router.push("/login"); }, [status]);
+  useEffect(() => { if (status === "unauthenticated") router.push("/login"); }, [status, router]);
   useEffect(() => { if (status === "authenticated") { fetchServicos(); fetchMateriais(); } }, [status, obraId]);
 
   async function fetchServicos() { const r = await fetch(`/api/obras/${obraId}/servicos`); if(r.ok) setServicos(await r.json()); }
   async function fetchMateriais() { const r = await fetch(`/api/obras/${obraId}/materiais`); if(r.ok) setMateriais(await r.json()); }
 
   async function deleteServico(id: string) {
-    await fetch(`/api/obras/${obraId}/servicos/${id}`, {method:"DELETE"});
+    setDeleteError("");
+    const res = await fetch(`/api/obras/${obraId}/servicos/${id}`, {method:"DELETE"});
+    if (!res.ok) {
+      setDeleteError("Erro ao remover serviço. Tente novamente.");
+      return;
+    }
     fetchServicos();
   }
   async function deleteMaterial(id: string) {
-    await fetch(`/api/obras/${obraId}/materiais/${id}`, {method:"DELETE"});
+    setDeleteError("");
+    const res = await fetch(`/api/obras/${obraId}/materiais/${id}`, {method:"DELETE"});
+    if (!res.ok) {
+      setDeleteError("Erro ao remover material. Tente novamente.");
+      return;
+    }
     fetchMateriais();
   }
 
@@ -316,20 +345,22 @@ export default function ObraPage() {
       <div className="bg-white border-b border-gray-100 px-4 pt-5 pb-3 sticky top-0 z-10">
         <div className="flex items-center gap-2 mb-3">
           <button onClick={() => router.push("/")} className="text-gray-400 text-sm">←</button>
-          <h1 className="font-semibold text-gray-900 flex-1">🏗️ Minha Obra</h1>
+          <h1 className="font-semibold text-gray-900 flex-1">Minha Obra</h1>
           <button onClick={() => setModal("convidar")} className="text-xs text-gray-400 border border-gray-200 rounded-lg px-2 py-1">+ Convidar</button>
         </div>
         <div className="flex gap-2">
           {(["resumo","servicos","materiais"] as const).map(t => (
             <button key={t} onClick={()=>setTab(t)}
               className={`flex-1 py-2 rounded-lg text-xs font-medium transition ${tab===t?"bg-blue-50 text-blue-600":"text-gray-400"}`}>
-              {t==="resumo"?"📊 Resumo":t==="servicos"?"🔧 Serviços":"📦 Materiais"}
+              {t==="resumo"?"Resumo":t==="servicos"?"Servicos":"Materiais"}
             </button>
           ))}
         </div>
       </div>
 
       <div className="px-4 pt-4">
+        {deleteError && <p className="text-red-500 text-xs mb-3">{deleteError}</p>}
+
         {/* RESUMO */}
         {tab === "resumo" && (
           <>
@@ -355,7 +386,7 @@ export default function ObraPage() {
               ))}
             </div>
             <button onClick={()=>setModal("compartilhar")} className="w-full py-3 bg-green-50 text-green-700 font-semibold rounded-xl text-sm mb-2">
-              📋 Compartilhar (tabela)
+              Compartilhar (tabela)
             </button>
           </>
         )}
@@ -398,8 +429,8 @@ export default function ObraPage() {
                         </div>
                       ))}
                       <div className="flex gap-2 mt-2">
-                        <button onClick={()=>{setEditServico(s);setModal("servico");}} className="flex-1 py-1.5 bg-blue-50 text-blue-600 text-xs font-medium rounded-lg">✏️ Editar</button>
-                        <button onClick={()=>deleteServico(s.id)} className="flex-1 py-1.5 bg-red-50 text-red-500 text-xs font-medium rounded-lg">🗑 Remover</button>
+                        <button onClick={()=>{setEditServico(s);setModal("servico");}} className="flex-1 py-1.5 bg-blue-50 text-blue-600 text-xs font-medium rounded-lg">Editar</button>
+                        <button onClick={()=>deleteServico(s.id)} className="flex-1 py-1.5 bg-red-50 text-red-500 text-xs font-medium rounded-lg">Remover</button>
                       </div>
                     </div>
                   )}
@@ -446,8 +477,8 @@ export default function ObraPage() {
                         </div>
                       ))}
                       <div className="flex gap-2 mt-2">
-                        <button onClick={()=>{setEditMaterial(m);setModal("material");}} className="flex-1 py-1.5 bg-blue-50 text-blue-600 text-xs font-medium rounded-lg">✏️ Editar</button>
-                        <button onClick={()=>deleteMaterial(m.id)} className="flex-1 py-1.5 bg-red-50 text-red-500 text-xs font-medium rounded-lg">🗑 Remover</button>
+                        <button onClick={()=>{setEditMaterial(m);setModal("material");}} className="flex-1 py-1.5 bg-blue-50 text-blue-600 text-xs font-medium rounded-lg">Editar</button>
+                        <button onClick={()=>deleteMaterial(m.id)} className="flex-1 py-1.5 bg-red-50 text-red-500 text-xs font-medium rounded-lg">Remover</button>
                       </div>
                     </div>
                   )}

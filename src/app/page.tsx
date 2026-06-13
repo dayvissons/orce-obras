@@ -11,26 +11,38 @@ export default function Home() {
   const [obras, setObras] = useState<Obra[]>([]);
   const [nome, setNome] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login");
     if (status === "authenticated") fetchObras();
-  }, [status]);
+  }, [status, router]);
 
   async function fetchObras() {
+    setError("");
     const res = await fetch("/api/obras");
-    if (res.ok) setObras(await res.json());
+    if (!res.ok) {
+      setError("Erro ao carregar obras. Tente novamente.");
+      return;
+    }
+    setObras(await res.json());
   }
 
   async function criarObra() {
     if (!nome.trim()) return;
     setLoading(true);
+    setError("");
     const res = await fetch("/api/obras", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ nome }),
     });
-    if (res.ok) { setNome(""); await fetchObras(); }
+    if (res.ok) {
+      setNome("");
+      await fetchObras();
+    } else {
+      setError("Erro ao criar obra. Tente novamente.");
+    }
     setLoading(false);
   }
 
@@ -41,7 +53,7 @@ export default function Home() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">🏗️ Minhas Obras</h1>
+          <h1 className="text-xl font-semibold text-gray-900">Minhas Obras</h1>
           <p className="text-xs text-gray-400 mt-0.5">{session?.user?.name}</p>
         </div>
         <button onClick={() => signOut()} className="text-xs text-gray-400 hover:text-gray-600">Sair</button>
@@ -68,8 +80,10 @@ export default function Home() {
         </div>
       </div>
 
+      {error && <p className="text-red-500 text-xs mb-4">{error}</p>}
+
       {/* Lista de obras */}
-      {obras.length === 0 && (
+      {obras.length === 0 && !error && (
         <div className="text-center text-gray-400 text-sm py-12">Nenhuma obra cadastrada ainda.</div>
       )}
       <div className="space-y-3">
