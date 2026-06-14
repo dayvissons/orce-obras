@@ -10,8 +10,8 @@ type FormaPag = { id: string; metodo: string; valor: number };
 type Material = { id: string; item: string; categoria: string; valorTotal: number; formasPagamento: FormaPag[] };
 
 const CATS_S = ["Drywall","Elétrica","Hidráulica","Marcenaria","Pintura","Gesso","Piso","Arquiteto","Outros"];
-const CATS_M = ["Iluminação","Hidráulica","Elétrica","Revestimento","Tintas","Ferragens","Louças","Outros"];
-const METODOS = ["PIX","Cartão de crédito","Cartão de débito","Dinheiro","Boleto","Transferência","Cheque"];
+const CATS_M = ["Iluminação","Hidráulica","Elétrica","Revestimento","Tintas","Ferragens","Louças","Móveis","Outros"];
+const METODOS = ["PIX","Cartão de crédito","Cartão de débito","Dinheiro","Boleto","Transferência",];
 
 // ─── Helpers ──────────────────────────────────────────────────────
 function fmt(v: number) {
