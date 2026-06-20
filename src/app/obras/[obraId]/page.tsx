@@ -351,6 +351,53 @@ function ModalConvidar({ obraId, onClose }: { obraId: string; onClose: () => voi
   );
 }
 
+// ─── Modal Confirmar ──────────────────────────────────────────────
+function ModalConfirmar({ nome, onClose, onConfirm }: {
+  nome: string;
+  onClose: () => void;
+  onConfirm: () => Promise<boolean>;
+}) {
+  const [loading, setLoading] = useState(false);
+
+  async function handleConfirm() {
+    setLoading(true);
+    const ok = await onConfirm();
+    setLoading(false);
+    if (ok) onClose();
+    else onClose();
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-end" onClick={e => e.target===e.currentTarget&&onClose()}>
+      <div className="bg-white rounded-t-2xl w-full p-5">
+        <div className="flex justify-between items-center mb-4">
+          <span className="font-semibold text-gray-900">Remover item</span>
+          <button onClick={onClose} className="text-gray-400 text-xl">✕</button>
+        </div>
+        <p className="text-sm text-gray-600 mb-1">Tem certeza que deseja remover:</p>
+        <p className="text-base font-semibold text-gray-900 mb-4 break-words">{nome}</p>
+        <p className="text-xs text-gray-400 mb-5">Esta ação não pode ser desfeita.</p>
+        <div className="flex gap-2">
+          <button
+            onClick={onClose}
+            disabled={loading}
+            className="flex-1 py-3 bg-gray-100 text-gray-700 font-semibold rounded-xl text-sm disabled:opacity-50"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={loading}
+            className="flex-1 py-3 bg-red-500 text-white font-semibold rounded-xl text-sm disabled:opacity-50"
+          >
+            {loading ? "Removendo..." : "Remover"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── PÁGINA PRINCIPAL ─────────────────────────────────────────────
 export default function ObraPage() {
   const { status } = useSession();
@@ -360,7 +407,8 @@ export default function ObraPage() {
   const [servicos, setServicos] = useState<Servico[]>([]);
   const [materiais, setMateriais] = useState<Material[]>([]);
   const [openCards, setOpenCards] = useState<Record<string,boolean>>({});
-  const [modal, setModal] = useState<null|"servico"|"material"|"compartilhar"|"convidar">(null);
+  const [modal, setModal] = useState<null|"servico"|"material"|"compartilhar"|"convidar"|"confirmar">(null);
+  const [pendingDelete, setPendingDelete] = useState<null|{ nome: string; onConfirm: () => Promise<boolean> }>(null);
   const [editServico, setEditServico] = useState<Servico|undefined>();
   const [editMaterial, setEditMaterial] = useState<Material|undefined>();
   const [deleteError, setDeleteError] = useState("");
@@ -371,23 +419,25 @@ export default function ObraPage() {
   async function fetchServicos() { const r = await fetch(`/api/obras/${obraId}/servicos`); if(r.ok) setServicos(await r.json()); }
   async function fetchMateriais() { const r = await fetch(`/api/obras/${obraId}/materiais`); if(r.ok) setMateriais(await r.json()); }
 
-  async function deleteServico(id: string) {
+  async function deleteServico(id: string): Promise<boolean> {
     setDeleteError("");
     const res = await fetch(`/api/obras/${obraId}/servicos/${id}`, {method:"DELETE"});
     if (!res.ok) {
       setDeleteError("Erro ao remover serviço. Tente novamente.");
-      return;
+      return false;
     }
-    fetchServicos();
+    await fetchServicos();
+    return true;
   }
-  async function deleteMaterial(id: string) {
+  async function deleteMaterial(id: string): Promise<boolean> {
     setDeleteError("");
     const res = await fetch(`/api/obras/${obraId}/materiais/${id}`, {method:"DELETE"});
     if (!res.ok) {
       setDeleteError("Erro ao remover material. Tente novamente.");
-      return;
+      return false;
     }
-    fetchMateriais();
+    await fetchMateriais();
+    return true;
   }
 
   const totalS = servicos.reduce((s,i)=>s+i.valorTotal,0);
@@ -489,7 +539,15 @@ export default function ObraPage() {
                       ))}
                       <div className="flex gap-2 mt-2">
                         <button onClick={()=>{setEditServico(s);setModal("servico");}} className="flex-1 py-1.5 bg-blue-50 text-blue-600 text-xs font-medium rounded-lg">Editar</button>
-                        <button onClick={()=>deleteServico(s.id)} className="flex-1 py-1.5 bg-red-50 text-red-500 text-xs font-medium rounded-lg">Remover</button>
+                        <button
+                          onClick={()=>{
+                            setPendingDelete({ nome: s.prestador, onConfirm: () => deleteServico(s.id) });
+                            setModal("confirmar");
+                          }}
+                          className="flex-1 py-1.5 bg-red-50 text-red-500 text-xs font-medium rounded-lg"
+                        >
+                          Remover
+                        </button>
                       </div>
                     </div>
                   )}
@@ -537,7 +595,15 @@ export default function ObraPage() {
                       ))}
                       <div className="flex gap-2 mt-2">
                         <button onClick={()=>{setEditMaterial(m);setModal("material");}} className="flex-1 py-1.5 bg-blue-50 text-blue-600 text-xs font-medium rounded-lg">Editar</button>
-                        <button onClick={()=>deleteMaterial(m.id)} className="flex-1 py-1.5 bg-red-50 text-red-500 text-xs font-medium rounded-lg">Remover</button>
+                        <button
+                          onClick={()=>{
+                            setPendingDelete({ nome: m.item, onConfirm: () => deleteMaterial(m.id) });
+                            setModal("confirmar");
+                          }}
+                          className="flex-1 py-1.5 bg-red-50 text-red-500 text-xs font-medium rounded-lg"
+                        >
+                          Remover
+                        </button>
                       </div>
                     </div>
                   )}
@@ -553,6 +619,13 @@ export default function ObraPage() {
       {modal === "material" && <ModalMaterial initial={editMaterial} obraId={obraId} onClose={()=>setModal(null)} onSaved={fetchMateriais} />}
       {modal === "compartilhar" && <ModalCompartilhar servicos={servicos} materiais={materiais} onClose={()=>setModal(null)} />}
       {modal === "convidar" && <ModalConvidar obraId={obraId} onClose={()=>setModal(null)} />}
+      {modal === "confirmar" && pendingDelete && (
+        <ModalConfirmar
+          nome={pendingDelete.nome}
+          onClose={()=>{ setModal(null); setPendingDelete(null); }}
+          onConfirm={pendingDelete.onConfirm}
+        />
+      )}
     </div>
   );
 }
