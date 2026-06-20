@@ -15,7 +15,7 @@ const servicoSchema = z.object({
   pagamentos: z.array(z.object({
     valor: z.number().positive(),
     data: z.string().min(1),
-    obs: z.string().optional(),
+    obs: z.string().nullish(),
   })).default([]),
 });
 

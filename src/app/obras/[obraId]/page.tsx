@@ -17,6 +17,37 @@ const METODOS = ["PIX","Cartão de crédito","Cartão de débito","Dinheiro","Bo
 function fmt(v: number) {
   return "R$ " + Number(v||0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
 }
+
+function maskCurrency(raw: string): string {
+  const digits = (raw || "").replace(/\D/g, "").slice(0, 13);
+  if (!digits) return "";
+  const cents = parseInt(digits, 10);
+  const reais = cents / 100;
+  return "R$ " + reais.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function parseMasked(masked: string): number {
+  const digits = (masked || "").replace(/\D/g, "");
+  if (!digits) return 0;
+  return parseInt(digits, 10) / 100;
+}
+
+function maskFromNumber(v: number | undefined | null): string {
+  if (v === undefined || v === null || isNaN(v as number)) return "";
+  const cents = Math.round((v as number) * 100);
+  return maskCurrency(String(cents));
+}
+
+function fmtDate(iso: string): string {
+  if (!iso) return "";
+  const ymd = iso.slice(0, 10);
+  const parts = ymd.split("-");
+  if (parts.length !== 3) return iso;
+  const [y, m, d] = parts;
+  if (!y || !m || !d) return iso;
+  return `${d}/${m}/${y}`;
+}
+
 function totalPagoS(s: Servico) { return s.pagamentos.reduce((a,p)=>a+p.valor,0); }
 function totalPagoM(m: Material) { return m.formasPagamento.reduce((a,f)=>a+f.valor,0); }
 function saldoS(s: Servico) { return s.valorTotal - totalPagoS(s); }
@@ -44,7 +75,7 @@ function ModalServico({ initial, obraId, onClose, onSaved }: {
 }) {
   const [prestador, setPrestador] = useState(initial?.prestador || "");
   const [categoria, setCategoria] = useState(initial?.categoria || CATS_S[0]);
-  const [valorTotal, setValorTotal] = useState(initial?.valorTotal?.toString() || "");
+  const [valorTotal, setValorTotal] = useState(maskFromNumber(initial?.valorTotal));
   const [pagamentos, setPagamentos] = useState<Pagamento[]>(
     initial?.pagamentos.map(p => ({...p, data: p.data.slice(0,10)})) || []
   );
@@ -53,8 +84,9 @@ function ModalServico({ initial, obraId, onClose, onSaved }: {
   const [error, setError] = useState("");
 
   function addPag() {
-    if (!nVal) return;
-    setPagamentos(p => [...p, {id: String(Date.now()), valor: Number(nVal), data: nData, obs: nObs}]);
+    const valor = parseMasked(nVal);
+    if (!valor) return;
+    setPagamentos(p => [...p, {id: String(Date.now()), valor, data: nData, obs: nObs}]);
     setNVal(""); setNObs("");
   }
 
@@ -63,7 +95,7 @@ function ModalServico({ initial, obraId, onClose, onSaved }: {
     setError("");
     const url = initial ? `/api/obras/${obraId}/servicos/${initial.id}` : `/api/obras/${obraId}/servicos`;
     const method = initial ? "PUT" : "POST";
-    const res = await fetch(url, { method, headers: {"Content-Type":"application/json"}, body: JSON.stringify({prestador,categoria,valorTotal:Number(valorTotal),pagamentos}) });
+    const res = await fetch(url, { method, headers: {"Content-Type":"application/json"}, body: JSON.stringify({prestador, categoria, valorTotal: parseMasked(valorTotal), pagamentos}) });
     setSaving(false);
     if (!res.ok) {
       setError("Erro ao salvar. Verifique os dados e tente novamente.");
@@ -89,14 +121,20 @@ function ModalServico({ initial, obraId, onClose, onSaved }: {
           {CATS_S.map(c=><option key={c}>{c}</option>)}
         </select>
         <label className="text-xs font-medium text-gray-500">VALOR TOTAL (R$)</label>
-        <input type="number" value={valorTotal} onChange={e=>setValorTotal(e.target.value)} placeholder="0,00"
-          className="w-full mt-1 mb-4 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 text-sm outline-none" />
+        <input
+          type="text"
+          inputMode="numeric"
+          value={valorTotal}
+          onChange={e => setValorTotal(maskCurrency(e.target.value))}
+          placeholder="R$ 0,00"
+          className="w-full mt-1 mb-4 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 text-sm outline-none"
+        />
 
         <div className="bg-gray-50 rounded-xl p-3 mb-4">
           <p className="text-xs font-medium text-gray-500 mb-2">PAGAMENTOS</p>
           {pagamentos.map(p=>(
             <div key={p.id} className="flex items-center gap-2 text-xs py-1.5 border-b border-gray-100 last:border-0">
-              <span className="text-gray-400">{p.data}</span>
+              <span className="text-gray-400">{fmtDate(p.data)}</span>
               <span className="font-semibold text-green-600">{fmt(p.valor)}</span>
               <span className="text-gray-400 flex-1 truncate">{p.obs}</span>
               <button onClick={()=>setPagamentos(ps=>ps.filter(x=>x.id!==p.id))} className="text-red-400 ml-auto">✕</button>
@@ -104,7 +142,14 @@ function ModalServico({ initial, obraId, onClose, onSaved }: {
           ))}
           <div className="mt-2 pt-2 border-t border-gray-100">
             <div className="flex gap-2 mb-2">
-              <input type="number" value={nVal} onChange={e=>setNVal(e.target.value)} placeholder="Valor" className="flex-1 bg-white border border-gray-100 rounded-lg px-2 py-1.5 text-xs outline-none" />
+              <input
+                type="text"
+                inputMode="numeric"
+                value={nVal}
+                onChange={e => setNVal(maskCurrency(e.target.value))}
+                placeholder="R$ 0,00"
+                className="flex-1 bg-white border border-gray-100 rounded-lg px-2 py-1.5 text-xs outline-none"
+              />
               <input type="date" value={nData} onChange={e=>setNData(e.target.value)} className="flex-1 bg-white border border-gray-100 rounded-lg px-2 py-1.5 text-xs outline-none" />
             </div>
             <input value={nObs} onChange={e=>setNObs(e.target.value)} placeholder="Observação (ex: entrada)" className="w-full bg-white border border-gray-100 rounded-lg px-2 py-1.5 text-xs outline-none mb-2" />
@@ -127,18 +172,19 @@ function ModalMaterial({ initial, obraId, onClose, onSaved }: {
 }) {
   const [item, setItem] = useState(initial?.item || "");
   const [categoria, setCategoria] = useState(initial?.categoria || CATS_M[0]);
-  const [valorTotal, setValorTotal] = useState(initial?.valorTotal?.toString() || "");
+  const [valorTotal, setValorTotal] = useState(maskFromNumber(initial?.valorTotal));
   const [formas, setFormas] = useState<FormaPag[]>(initial?.formasPagamento || []);
   const [fMetodo, setFMetodo] = useState(METODOS[0]); const [fVal, setFVal] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   const somaFormas = formas.reduce((a,f)=>a+f.valor,0);
-  const falta = Number(valorTotal||0) - somaFormas;
+  const falta = parseMasked(valorTotal) - somaFormas;
 
   function addForma() {
-    if (!fVal) return;
-    setFormas(f=>[...f,{id:String(Date.now()),metodo:fMetodo,valor:Number(fVal)}]);
+    const valor = parseMasked(fVal);
+    if (!valor) return;
+    setFormas(f => [...f, {id: String(Date.now()), metodo: fMetodo, valor}]);
     setFVal("");
   }
 
@@ -147,7 +193,7 @@ function ModalMaterial({ initial, obraId, onClose, onSaved }: {
     setError("");
     const url = initial ? `/api/obras/${obraId}/materiais/${initial.id}` : `/api/obras/${obraId}/materiais`;
     const method = initial ? "PUT" : "POST";
-    const res = await fetch(url, { method, headers: {"Content-Type":"application/json"}, body: JSON.stringify({item,categoria,valorTotal:Number(valorTotal),formasPagamento:formas}) });
+    const res = await fetch(url, { method, headers: {"Content-Type":"application/json"}, body: JSON.stringify({item, categoria, valorTotal: parseMasked(valorTotal), formasPagamento: formas}) });
     setSaving(false);
     if (!res.ok) {
       setError("Erro ao salvar. Verifique os dados e tente novamente.");
@@ -173,8 +219,14 @@ function ModalMaterial({ initial, obraId, onClose, onSaved }: {
           {CATS_M.map(c=><option key={c}>{c}</option>)}
         </select>
         <label className="text-xs font-medium text-gray-500">VALOR TOTAL (R$)</label>
-        <input type="number" value={valorTotal} onChange={e=>setValorTotal(e.target.value)} placeholder="0,00"
-          className="w-full mt-1 mb-4 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 text-sm outline-none" />
+        <input
+          type="text"
+          inputMode="numeric"
+          value={valorTotal}
+          onChange={e => setValorTotal(maskCurrency(e.target.value))}
+          placeholder="R$ 0,00"
+          className="w-full mt-1 mb-4 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 text-sm outline-none"
+        />
 
         <div className="bg-gray-50 rounded-xl p-3 mb-4">
           <div className="flex justify-between items-center mb-2">
@@ -195,7 +247,14 @@ function ModalMaterial({ initial, obraId, onClose, onSaved }: {
               <select value={fMetodo} onChange={e=>setFMetodo(e.target.value)} className="flex-1 bg-white border border-gray-100 rounded-lg px-2 py-1.5 text-xs outline-none">
                 {METODOS.map(m=><option key={m}>{m}</option>)}
               </select>
-              <input type="number" value={fVal} onChange={e=>setFVal(e.target.value)} placeholder="Valor" className="flex-1 bg-white border border-gray-100 rounded-lg px-2 py-1.5 text-xs outline-none" />
+              <input
+                type="text"
+                inputMode="numeric"
+                value={fVal}
+                onChange={e => setFVal(maskCurrency(e.target.value))}
+                placeholder="R$ 0,00"
+                className="flex-1 bg-white border border-gray-100 rounded-lg px-2 py-1.5 text-xs outline-none"
+              />
             </div>
             <button onClick={addForma} className="w-full py-2 bg-orange-50 text-orange-600 text-xs font-medium rounded-lg">+ Adicionar forma</button>
           </div>
@@ -423,7 +482,7 @@ export default function ObraPage() {
                       {s.pagamentos.length === 0 && <p className="text-xs text-gray-400">Nenhum.</p>}
                       {s.pagamentos.map(p=>(
                         <div key={p.id} className="flex gap-2 text-xs py-1 border-b border-gray-100 last:border-0">
-                          <span className="text-gray-400">{p.data.slice(0,10)}</span>
+                          <span className="text-gray-400">{fmtDate(p.data)}</span>
                           <span className="font-semibold text-green-600">{fmt(p.valor)}</span>
                           <span className="text-gray-400 truncate">{p.obs}</span>
                         </div>
